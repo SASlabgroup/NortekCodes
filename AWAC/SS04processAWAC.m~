@@ -1,0 +1,255 @@
+% script to process SS04 AWAC from Feb or May 2011
+%
+% J. Thomson, 5/2011, rev 7/2011 
+%
+% detrending direction problematic b/c wrapping
+%
+
+%clear all
+
+% load QC data from AWACquicklook.m, use find-and-replace to switch from Feb to Jun
+% *** remember to change n and zid ***
+
+%load /Volumes/Data/ADMIRALTY/ADMIRALTY_Feb2011/SS04_AWAC2011/SS04_AWAC2011.mat
+clear v3
+
+%%
+
+AWAC.n = 0.112 % Doppler Noise (0.22 for Feb, 0.112 for MayJun)
+AWAC.zid = 8  % which depth bin ( use 15 for Feb and 8 for Jun to get 8.1 m ASB)
+AWAC.fs = 1; % sampling frequency (Hz)
+cutin = 0.8;
+
+
+%% parse into bursts 
+burstlength = 300 % burst length, secs
+
+bursttime = reshape(time(1:(length(time)-rem(length(time),AWAC.fs*burstlength))),AWAC.fs*burstlength,[]);
+burstdepth = reshape(pres(1:(length(pres)-rem(length(pres),AWAC.fs*burstlength))),AWAC.fs*burstlength,[]);
+% components
+v1 = reshape(v1(1:(length(time)-rem(length(time),AWAC.fs*burstlength)),AWAC.zid),AWAC.fs*burstlength,[]);
+v2 = reshape(v2(1:(length(time)-rem(length(time),AWAC.fs*burstlength)),AWAC.zid),AWAC.fs*burstlength,[]);
+%burstv3 = reshape(v3(1:(length(time)-rem(length(time),AWAC.fs*burstlength)),AWAC.zid),AWAC.fs*burstlength,[]);
+% speed
+burstu = sqrt( v1.^2 + v2.^2 );
+
+AWAC.time = mean(bursttime);
+AWAC.depth = mean(burstdepth); 
+%AWAC.profile = squeeze( mean( sqrt( reshape(v1(1:(length(time)-rem(length(time),AWAC.fs*burstlength)),:),length(z),AWAC.fs*burstlength,[]).^2 + reshape(v1(1:(length(time)-rem(length(time),AWAC.fs*burstlength)),:),length(z),AWAC.fs*burstlength,[]).^2),2 ) );
+AWAC.z = z;
+
+%% remove trends (tidal signal)
+AWAC.ubar = nanmean( burstu ); 
+AWAC.thetabar =  rad2deg( atan2(nanmean(burstv1),nanmean(burstv2)) );  
+
+for bi=1:length(AWAC.time),
+    bi
+    burstu(:,bi) = detrend( burstu(:,bi) );
+    bursttheta(:,bi) = detrend( rad2deg(abs(atan2(burstv1(:,bi),burstv2(:,bi))) ) );
+end
+
+%% determine SPEED: mean, standard deviation, and intensity for each burst
+% ** scalar speed, assumed along principle axis **
+AWAC.uprime = nanstd( burstu );
+%AWAC.Iu = 100 * sqrt(AWAC.uprime.^2 - AWAC.n^2 )./AWAC.ubar;
+
+
+%% depth profiles 
+v1=v1'; v2 = v2'; v3=v3';
+v1profiles = reshape(v1(1:length(z),1:(length(time)-rem(length(time),AWAC.fs*burstlength))),length(z),AWAC.fs*burstlength,[]);
+v2profiles = reshape(v2(1:length(z),1:(length(time)-rem(length(time),AWAC.fs*burstlength))),length(z),AWAC.fs*burstlength,[]);
+profiles = sqrt(v1profiles.^2 + v2profiles.^2);
+AWAC.ubarprofile = squeeze( mean( profiles ,2 ) );
+AWAC.uprimeprofile = squeeze( nanstd( profiles, 0 , 2) );
+AWAC.Iuprofile = 100 * sqrt(AWAC.uprimeprofile.^2 - AWAC.n^2 )./AWAC.ubarprofile;
+AWAC.Iuprofile = real(AWAC.Iuprofile); 
+AWAC.Iuprofile( find(AWAC.ubarprofile < cutin | AWAC.Iuprofile==0) ) = NaN;
+
+
+%% determine DIRECTION: mean, standard deviation, and intensity for each burst
+% normalize by 90, which would be complete off-axis flow
+AWAC.thetaprime = nanstd( bursttheta );
+%AWAC.thetaprime = nanstd( rad2deg(abs(atan2(burstv1,burstv2)) ) ); 
+%AWAC.Itheta = 100 * sqrt( AWAC.thetaprime.^2 - rad2deg(atan2(AWAC.n,AWAC.ubar)).^2 ) ./ 90;  % hack correction
+%AWAC.Itheta = 100 * sqrt( AWAC.thetaprime.^2 - (rad2deg(AWAC.n./AWAC.ubar)).^2 ) ./ 90;  % taylor series correction, 1st order
+%AWAC.Itheta = 100 * sqrt( AWAC.thetaprime.^2 - (rad2deg(  0.33*(AWAC.n./AWAC.ubar).^3)  ).^2 ) ./ 90;  % taylor series correction, 2nd order
+%AWAC.Itheta = 100 * abs(AWAC.thetaprime)./90 ; % uncorrected
+
+%% turn direction into geographic (still magnetic) 
+newtheta = AWAC.thetabar-90;
+newtheta( newtheta>0 ) = -(360-newtheta(newtheta>0));
+figure(1), clf
+plot(AWAC.ubar,newtheta,'.')
+AWAC.thetabar = -newtheta;
+
+
+%% remove slack periods
+slack = find(AWAC.ubar < cutin);
+%AWAC.Iu(slack) = NaN;
+%AWAC.Itheta(slack) = NaN;
+
+%% remove imag values (from - N^2 correction)
+%AWAC.Iu( imag(AWAC.Iu)~=0 ) = NaN; 
+%AWAC.Itheta( imag(AWAC.Itheta)~=0 ) = NaN; 
+
+%% shear
+dz = 0.5;
+% above = mean( reshape(horizontalvel(AWAC.zid+1,1:(length(time)-rem(length(time),AWAC.fs*burstlength))),AWAC.fs*burstlength,[]) );
+% below = mean( reshape(horizontalvel(AWAC.zid-1,1:(length(time)-rem(length(time),AWAC.fs*burstlength))),AWAC.fs*burstlength,[]) );
+% AWAC.dUdz = abs((above - 2.*AWAC.ubar + below)) ./ (2*dz);
+
+
+%%  convert ENU to beam velocities (for structure function
+% 
+% tic
+% for ni=1:length(time), 
+% 
+% hh = pi*(heading(ni)-90)/180;
+% pp = pi*pitch(ni)/180;
+% rr = pi*roll(ni)/180;
+% 
+% % Make heading matrix
+% H = [cos(hh) sin(hh) 0; -sin(hh) cos(hh) 0; 0 0 1;];
+% 
+% % Make tilt matrix
+% P = [cos(pp) -sin(pp)*sin(rr) -cos(rr)*sin(pp);...
+%       0             cos(rr)          -sin(rr);  ...
+%       sin(pp) sin(rr)*cos(pp)  cos(pp)*cos(rr)];
+% 
+% % instrument head matrix (from .hdr file) 
+% T = [ 1.5774 -0.7891 -0.7891; 0.0000 -1.3662 1.3662;  0.3677 0.3677 0.3677; ];  
+%   
+% % Make resulting transformation matrix
+% R = H*P*T;
+% 
+% for bi=1:cells,
+%     beambin = (inv(R) * [v1(bi,ni) v2(bi,ni) v3(bi,ni)]'); % vel x time at single bin
+%     v1(bi,ni) = beambin(1);
+%     v2(bi,ni) = beambin(2);
+%     v3(bi,ni) = beambin(3);
+% end
+% 
+% end
+% tic
+% 
+% % project cell range to alongbeam axis
+% zbeam = z / cos(deg2rad(25));
+% 
+% %% dissipation via structure function (Wiles et al, 2006)
+% 
+% tic
+% [tke1 epsilon1 residual1 A1 N1] = dissipation( v1, zbeam, burstlength*AWAC.fs*2, 0); 
+% [tke2 epsilon2 residual2 A2 N2] = dissipation( v2, zbeam, burstlength*AWAC.fs*2, 0); 
+% [tke3 epsilon3 residual3 A3 N3] = dissipation( v3, zbeam, burstlength*AWAC.fs*2, 0); 
+% toc
+% 
+% % average beam results
+% epsilon1( find(N1>(2*AWAC.n^2)) ) = NaN;
+% epsilon2( find(N2>(2*AWAC.n^2)) ) = NaN;
+% epsilon3( find(N3>(2*AWAC.n^2)) ) = NaN;
+% 
+% AWAC.epsilonprofile = ( epsilon1 + epsilon2 + epsilon3 ) ./3; 
+% 
+% AWAC.epsilonprofile = AWAC.epsilonprofile./ 1024; % convert from W m^-3 to m^2/s^3
+
+
+
+%% spectra 
+
+for i=1:length(AWAC.time),
+    
+    %horizontal
+    [psd f] = pwelch( burstu(:,i), [], [], [], AWAC.fs);
+    psd(1) = []; f(1) = []; % remove mean
+    AWAC.Suuf(:,i) = psd;  % power spectral density of velocity mag, m^2 s^-2 Hz^-1
+    
+    % vertical
+    [wpsd f] = pwelch( burstv3(:,i) - mean(burstv3(:,i)), [], [], [], AWAC.fs);
+    wpsd(1) = []; f(1) = []; % remove mean
+    AWAC.Swwf(:,i) = wpsd;  % power spectral density of velocity mag, m^2 s^-2 Hz^-1
+    
+    % dissipation
+%     finds = find( f > 0.1 & f < 1 );
+%     warning('off','stats:statrobustfit:IterationLimit')
+%     [speedfit stats] = robustfit(f(finds).^(-5/3),psd(finds),'bisquare',1,'off');
+%     AWAC.epsilon(i) = speedfit.^(3/2) * 2;  % m^2 /s^3
+end
+
+AWAC.Suuf(:,slack)= NaN;
+AWAC.Swwf(:,slack)= NaN;
+AWAC.df = median(diff(f));
+AWAC.f = f;
+
+% spectral Doppler noise 
+AWAC.Suufnoise = (AWAC.n^2)./(AWAC.df * length(AWAC.f));
+
+figure(1), clf
+loglog(AWAC.f,AWAC.Suuf,'g'), hold on
+%loglog(AWAC.f,AWAC.Swwf,'k:')
+loglog(AWAC.f,nanmean(AWAC.Suuf,2),'k'),
+loglog([1e-3 1],[1 1]*AWAC.Suufnoise,'r--')
+print -dpng AWAC_Suuf.png
+
+
+%% wavenumber spectra and fractional turbulent intensity (noise corrected)
+l = (ones(length(f),1)*AWAC.ubar) ./ (f*ones(1,length(AWAC.ubar))) ; % length scale, m, from Taylor hypothesis
+psdl = (AWAC.Suuf - AWAC.Suufnoise) ./ (ones(length(f),1)*AWAC.ubar) .* (f*ones(1,length(AWAC.ubar))).^2; % power spectral density, m^2 s^-2 m^-1
+[da dl] = gradient(l); dl = abs(dl); % length bandwidths (non-uniform)
+
+% integrate variance and map to uniform length bands
+AWAC.dL = 1;
+AWAC.L = [AWAC.dL:AWAC.dL:(max(AWAC.ubar)./min(f))]; % uniform length scale bins, m
+
+for i=find(AWAC.ubar>cutin),
+    AWAC.SuuL(:,i) = interp1( l(:,i), psdl(:,i).*dl(:,i), AWAC.L); % integrated velocity variance in each uniform length band, m^2 s^-2
+end
+AWAC.SuuL(:,slack)= NaN;
+
+AWAC.iul = 100 * sqrt(AWAC.SuuL) ./ (ones(length(AWAC.L),1)*AWAC.ubar);
+
+figure(1),clf
+plot(AWAC.L,AWAC.iul,'g'), hold on
+plot(AWAC.L,nanmean(AWAC.iul,2),'k')
+xlabel('i_u [%]'),ylabel('L [m]')
+print -dpng AWAC_iu.png
+
+
+%% save results 
+AWAC.Iu = sqrt( AWAC.uprime.^2 - AWAC.n.^2 ) ./ AWAC.ubar; 
+
+%%
+save([ prefix 'processed_' num2str(burstlength) 's.mat'],'AWAC')%,'epsilon*','N*','A*') 
+
+%% plots
+
+%clear all
+%load(['SS04_' num2str(burstlength) 'sprocessedAWAC_Feb2011.mat'],'AWAC')
+
+% disp('AWAC')
+% nanmean(AWAC.Iu)
+% nanstd(AWAC.Iu)
+% nanmean(AWAC.Itheta)
+% nanstd(AWAC.Itheta)
+% 
+% figure(1),clf
+% hist([AWAC.Iu; AWAC.Itheta;]',[0:1:100]),
+% axis([0 30 0 inf]),
+% legend('I_u [%]','I_\theta [%]')
+% print -dpng AWAC_intensity.png
+
+figure(2), clf
+plot(AWAC.ubar,AWAC.uprime,'.');
+xlabel('u [m/s]'),ylabel('u\prime [m/s]')
+print -dpng AWAC_uprime_vs_ubar.png
+
+figure(3), clf 
+plotclr(AWAC.thetabar,AWAC.thetaprime,AWAC.ubar);
+xlabel('<\theta> [deg]')
+ylabel('\theta\prime [deg]')
+print -dpng AWAC_directions.png
+
+figure(4), clf
+plot(AWAC.ubar,AWAC.Iu,'.');
+xlabel('u [m/s]'),ylabel('u\prime [m/s]')
+print -dpng AWAC_uprime_vs_ubar.png
+

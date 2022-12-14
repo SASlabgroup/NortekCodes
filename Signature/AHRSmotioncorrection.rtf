@@ -1,0 +1,112 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1671
+{\fonttbl\f0\fnil\fcharset0 HelveticaNeue;\f1\fswiss\fcharset0 Helvetica;\f2\fnil\fcharset0 Calibri;
+\f3\fnil\fcharset0 Verdana;\f4\fnil\fcharset0 Verdana-Bold;\f5\fnil\fcharset0 Calibri-Bold;
+}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red36\green64\blue132;\red0\green0\blue0;
+\red1\green30\blue96;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0\cname textColor;\cssrgb\c18431\c32941\c58824;\cssrgb\c0\c0\c0;
+\cssrgb\c0\c17647\c45098;}
+{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid1\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{circle\}}{\leveltext\leveltemplateid2\'01\uc0\u9702 ;}{\levelnumbers;}\fi-360\li1440\lin1440 }{\listname ;}\listid1}}
+{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}}
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 From: David Velasco <David.Velasco@nortekgroup.com>\
+Subject: RE: CWTMA Follow Up\
+Date: March 29, 2019 at 1:05:46 PM PDT\
+To: Jim Thomson <jthomson@apl.washington.edu>\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f1\fs24 \cf2 \
+\pard\pardeftab720\sl360\sa0\partightenfactor0
+
+\f2\fs29\fsmilli14667 \cf3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 Ah, yes, this is indeed already available in the firmware and also in the OceanContour software.\'a0 At the firmware level, it\'92s only applied if you use the telemetry file option for real-time output.\'a0 At the software level, you can also apply it regardless of where the tilt data came from\'97AHRS or standard compass.\'a0 If you just take the radial velocities, then you\'92ll have to map the bins either yourself (say, in MATLAB) or using OceanContour, which simplifies the process quite a bit.\cf4 \strokec4 \
+\cf3 \strokec3 \'a0\cf4 \strokec4 \
+\cf3 \strokec3 Attached are the following scripts:\cf4 \strokec4 \
+\cf3 \strokec3 \'a0\cf4 \strokec4 \
+\pard\tx220\tx720\pardeftab720\sl360\sa0\partightenfactor0
+\ls1\ilvl0\cf3 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 signatureAD2CP_beam2xyz_enu.m\
+\pard\tx940\tx1440\pardeftab720\sl360\sa0\partightenfactor0
+\ls1\ilvl1\cf3 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 Converts radial velocities to XYZ and ENU\
+\ls1\ilvl1\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 Same core script that Sven developed for Marricarmen\'92s work, but has since been expanded to include AHRS and also to add option for magnetic declination correction.\
+\pard\tx220\tx720\pardeftab720\sl360\sa0\partightenfactor0
+\ls1\ilvl0\cf3 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 Map2Vertical.m\
+\pard\tx940\tx1440\pardeftab720\sl360\sa0\partightenfactor0
+\ls1\ilvl1\cf3 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 Bin mapping algorithm\
+\ls1\ilvl1\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 Makes use of the next two scripts below\
+\pard\tx220\tx720\pardeftab720\sl360\sa0\partightenfactor0
+\ls1\ilvl0\cf3 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 CalcHPRMatrix.m\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 CalcTiltMatrix.m\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 CalcStndHPR.m\
+\pard\tx940\tx1440\pardeftab720\sl360\sa0\partightenfactor0
+\ls1\ilvl1\cf3 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 Script to compute the tilt with just accelerometer data form the AHRS\
+\ls1\ilvl1\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 Makes use of the next two scripts below\
+\pard\tx220\tx720\pardeftab720\sl360\sa0\partightenfactor0
+\ls1\ilvl0\cf3 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 CalcAD2CPattitude.m\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 CalcAD2CPHeading.m\
+\pard\pardeftab720\sl360\sa0\partightenfactor0
+\cf3 \'a0\cf4 \strokec4 \
+\cf3 \strokec3 Note all these codes assume the .ad2cp to .mat conversion was done through MIDAS, so if you used the Deployment software, the structure names might not match.\'a0 For reference, below are the orientation bits (from the AD2CP System Integrator Guide).\'a0 We haven\'92t really done anything with side-looking orientations yet.\cf4 \strokec4 \
+\pard\pardeftab720\sl360\sa0\partightenfactor0
+\cf4  \
+\pard\pardeftab720\sl360\sa0\partightenfactor0
+\cf3 \strokec3 \'a0\cf4 \strokec4 \
+\pard\pardeftab720\sl320\sa0\partightenfactor0
+
+\f3\fs26\fsmilli13333 \cf4 Best regards, 
+\f2\fs29\fsmilli14667 \
+\pard\pardeftab720\sl320\sa0\partightenfactor0
+
+\f3\fs26\fsmilli13333 \cf3 \strokec3 \'a0
+\f2\fs29\fsmilli14667 \cf4 \strokec4 \
+\pard\pardeftab720\sl320\sa0\partightenfactor0
+
+\f4\b\fs26\fsmilli13333 \cf5 \strokec5 David W. Velasco\cf4 \strokec4 \uc0\u8232 
+\f3\b0 +1 508 340 5230 (m)
+\f2\fs29\fsmilli14667 \
+\pard\pardeftab720\sl320\sa0\partightenfactor0
+
+\f3\fs26\fsmilli13333 \cf4 +1 617 206 5748 (o)
+\f2\fs29\fsmilli14667 \
+\pard\pardeftab720\sl360\sa0\partightenfactor0
+\cf3 \strokec3 \'a0\cf4 \strokec4 \
+\pard\pardeftab720\sl360\sa0\partightenfactor0
+
+\f5\b \cf4 From:
+\f2\b0  Jim Thomson <jthomson@apl.washington.edu> \uc0\u8232 
+\f5\b Sent:
+\f2\b0  Friday, March 29, 2019 11:55 AM\uc0\u8232 
+\f5\b To:
+\f2\b0  David Velasco <David.Velasco@nortekgroup.com>\uc0\u8232 
+\f5\b Subject:
+\f2\b0  Re: CWTMA Follow Up\
+\'a0\
+\pard\pardeftab720\sl320\sa0\partightenfactor0
+
+\f1\fs28 \cf4 \'a0
+\f2\fs29\fsmilli14667 \
+\pard\pardeftab720\sl360\sa0\partightenfactor0
+\cf3 \strokec3 We have not considered adding the ability to re-process the AHRS data with using just the accelerometer (static tilt) input onboard the instrument.\'a0\'a0I guess I\'92m struggling to see the benefit of this in the firmware.\'a0\'a0I mean, if you already have the ability to measure dynamic tilt, why would one also want the instrument to provide data in a frame of reference that\'92s effectively guaranteed to give bad data?\'a0\'a0From a demonstration perspective, that is, making plots like Fig. 11 on the paper, I see the benefit.\'a0\'a0But, this is obviously my perspective from the manufacturer\'92s point of view, so I\'92d be keen to hear your input for having it at the firmware level.\cf4 \strokec4 \
+\'a0\
+I think I did not phrase my question well. \'a0I meant will Nortek offer an onboard correction using dynamic tilt? \'a0Perhaps this is already done when the user selects ENU ouput and has an AHRS unit installed? \'a0It just wasn\'92t clear to me\'85. and I usually work with beam velocities, so have not paid much attention to the other output options.\'a0\
+\uc0\u8232 \u8232 \
+\cf3 \strokec3 \'a0\cf4 \strokec4 \
+\cf3 \strokec3 As far as MATLAB code, yes.\'a0\'a0Let me organize them a bit and I\'92ll send shortly.\cf4 \strokec4 \
+\'a0\
+Great, thanks!\
+\pard\pardeftab720\sl360\sa0\partightenfactor0
+\cf4  \
+}
