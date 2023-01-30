@@ -1,47 +1,55 @@
-% process Vector data from TTT in daily blocks (continuous sampling)
+% process Vector data (continuous sampling)
 % 32 Hz sampling
 %
+% J. Thomson, 2011 (TTT version)
+%               2022 (generalize)
 
-filebase = 'TTM_PNNLvector_Jun2012_sampleburst';
+clear all, close all
+
+filebase = 'VEC_402';
 fpath = './';
+fs = 32; % Hz 
+starttime = datenum(2022,8,9,16,0,0); % 8/9/2022 4:00:00 PM
 
-data = load([filebase '.dat']);
+data = load([fpath filebase '.dat']);
 
 u = data(:,3);
 v = data(:,4);
 w = data(:,5);
 
-%%
+%% scalar magnitude
 
-mag = sqrt(u.^2 + v.^2);
+fastmag = sqrt(u.^2 + v.^2);
 
+%% full time
+fastt = [1/fs:1/fs:length(fastmag)./fs];
+%fastt = starttime + fastt ./ (24*3600);
 
-%%
-slowt = [0:60*32:length(mag)];
-slowmag = interp1( [1:length(mag)], mag, slowt );
+%% make a smoothed magnitude product 
 
+dt = 600; % s
+slowt = decimate( fastt, dt*fs);
+slowmag = decimate( fastmag, dt*fs);
+slowu = decimate( u, dt*fs);
+slowv = decimate( v, dt*fs);
+slowmag = sqrt(slowu.^2 + slowv.^2);
+
+%% save as mat 
+
+save([fpath filebase '.mat'],'u','v','w','fastt','fastmag','slowt','slowmag','starttime')
+save([fpath filebase '_smoothed.mat'],'slowt','slowmag','starttime')
 
 %%
 
 figure(1), clf
 
 subplot(2,1,1),
-plot(slowt./(32*60*60),slowmag,'r-'), hold on,
-for i = 1:10:(60*24), 
-    plot(slowt(i)./(32*60*60),slowmag(i),'k.'),
-end
+plot(fastt,fastmag,'b.',slowt,slowmag,'r-'), hold on,
 set(gca,'FontSize',16,'FontWeight','demi')
-axis([0 24 0 2]),
-ylabel('V [m/s]'), xlabel('Time [hrs]'),
-title('17 Feb 2011','FontSize',20,'FontWeight','bold')
+%axis([0 24 0 2]),
+ylabel('[m/s]'), 
+xlabel('Time [s]'),
+legend('raw',['dt=' num2str(dt,3)])
 
-
-subplot(2,1,2),
-plot([0:(32*60*10)]./(32*60),mag([2.2e6:(2.2e6+32*60*10)]),'r-'), hold on
-plot([0:(32*60*1)]./(32*60),mag([2.2e6:(2.2e6+32*60*1)]),'k-'), hold on
-set(gca,'FontSize',16,'FontWeight','demi')
-axis([0 (32*60*10)./(32*60) 0 2]),
-ylabel('V [m/s]'), xlabel('Time [min]'),
-
-
+print('-dpng',[fpath filebase '.png'])
 
