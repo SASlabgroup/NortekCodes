@@ -17,7 +17,8 @@ tic
 %% Set constants and QC criteria
 %site = 'S1A1'; lat = 70.48695; lon = -162.28278; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'S2A1'; lat = 70.77422; lon = -149.47707; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
-site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
+%site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
+site = 'NORSE'; lat = 70.831946; lon = -6.399105; doff=385; % CODA S1-A1, a sea spider 0.75 m off the seabed
 
 despike = true;
 mindepth = 4;
@@ -35,7 +36,7 @@ icebincenters = [0:.5:10]; % meters
 
 dataDir = ['./'];
 
-fNameSigBase = ['*CODA*.mat'];
+fNameSigBase = ['S100793A014*.mat'];
 
 flist = dir([dataDir fNameSigBase ]);
 
@@ -88,8 +89,14 @@ for fi=1:length(flist)
         range = Config.Burst_BlankingDistance + Config.Burst_CellSize*[1:Config.Burst_NCells];
         velindex = find(range < min(ast),1,'last'); % bin of burst velocity profile to use in wave processing
         if isempty(velindex), velindex = 1; end
-        u = double( Data.Burst_VelEast(burstInd, velindex ) );
-        v = double( Data.Burst_VelNorth(burstInd, velindex ) );
+        if isfield(Data,'Burst_VelEast')
+            u = double( Data.Burst_VelEast(burstInd, velindex ) );
+            v = double( Data.Burst_VelNorth(burstInd, velindex ) );
+        else
+            u = NaN* double( Data.Burst_VelBeam1(burstInd, velindex ) );
+            v = NaN* double( Data.Burst_VelBeam2(burstInd, velindex ) );
+            disp('** No burst ENU transform, wave directios will be spurious')
+        end
         bursttime = Data.Burst_Time(burstInd);
         rate = double( Config.Burst_SamplingRate );
         
@@ -212,13 +219,26 @@ for fi=1:length(flist)
         
         %% profiles
         sigAverage(acounter).z = z;
-        sigAverage(acounter).east = mean( Data.Average_VelEast(AvgInd,:) );
-        sigAverage(acounter).north = mean( Data.Average_VelNorth(AvgInd,:) );
-        sigAverage(acounter).up = ( mean(Data.Average_VelUp1(AvgInd,:)) + mean(Data.Average_VelUp2(a,:)) ) ./ 2;
-        sigAverage(acounter).backscatter1 = mean( Data.Average_AmpBeam1(AvgInd,:) );
-        sigAverage(acounter).backscatter2 = mean( Data.Average_AmpBeam2(AvgInd,:) );
-        sigAverage(acounter).backscatter3 = mean( Data.Average_AmpBeam3(AvgInd,:) );
-        sigAverage(acounter).backscatter4 = mean( Data.Average_AmpBeam4(AvgInd,:) );
+        if size(Data.Average_VelEast,1) == 1 % check if ENU needs to be reshaped (as in NORSE, but not CODA)
+            checklength = length(Data.Average_Time) * length(z) - size(Data.Average_VelEast,2);
+            if checklength ~=0
+                Data.Average_VelEast(end + [1:checklength]) = NaN;
+                Data.Average_VelNorth(end + [1:checklength]) = NaN;
+                Data.Average_VelUp1(end + [1:checklength]) = NaN;
+                Data.Average_VelUp2(end + [1:checklength]) = NaN;
+            end
+            Data.Average_VelEast = reshape(Data.Average_VelEast, length(Data.Average_Time), length(z));
+            Data.Average_VelNorth = reshape(Data.Average_VelNorth, length(Data.Average_Time), length(z));
+            Data.Average_VelUp1 = reshape(Data.Average_VelUp1, length(Data.Average_Time), length(z));
+            Data.Average_VelUp2 = reshape(Data.Average_VelUp2, length(Data.Average_Time), length(z));
+        end
+        sigAverage(acounter).east = nanmean( Data.Average_VelEast(AvgInd,:) );
+        sigAverage(acounter).north = nanmean( Data.Average_VelNorth(AvgInd,:) );
+        sigAverage(acounter).up = ( nanmean(Data.Average_VelUp1(AvgInd,:)) + nanmean(Data.Average_VelUp2(a,:)) ) ./ 2;
+        sigAverage(acounter).backscatter1 = nanmean( Data.Average_AmpBeam1(AvgInd,:) );
+        sigAverage(acounter).backscatter2 = nanmean( Data.Average_AmpBeam2(AvgInd,:) );
+        sigAverage(acounter).backscatter3 = nanmean( Data.Average_AmpBeam3(AvgInd,:) );
+        sigAverage(acounter).backscatter4 = nanmean( Data.Average_AmpBeam4(AvgInd,:) );
         
         %% ice products (if tracking enabled)
         sigAverage(acounter).icethickness = NaN;
