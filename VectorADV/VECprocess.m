@@ -7,7 +7,7 @@
 clear, close all
 
 filepath = './';
-fileprefix = 'AgatePass_Vector_16Jul2024_VR1_0_';
+fileprefix = 'AgatePass_Vector_16Jul2024_VR0_3_';
 
 files = dir([ filepath fileprefix '*.dat' ]); % note that this file list may not be sequential because of digit changes in naming
 
@@ -207,6 +207,7 @@ for si=1:length(spdgrid)
 end
 set(gca,'fontsize',16,'fontweight','demi')
 title(fileprefix,'interpreter','none')
+ylabel('TKE [m^2/s^2/Hz]'), xlabel('Frequency [Hz]')
 cb = colorbar('location','north');cb.Limits = [spdgrid(1) spdgrid(end)];
 caxis([spdgrid(1) spdgrid(end)])
 cb.Label.String = 'm/s';
