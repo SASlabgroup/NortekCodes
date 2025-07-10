@@ -18,9 +18,10 @@ prefix  =  wd((wdi+1):length(wd));
 
 filebase = [ fpath prefix ];
 
+poffset = 0.4 % pressure offset (atmospheric variations) 
 
-% hardwire from hdr file:
-res = 0.50; % m
+% hardwire these settings from .hdr file:
+res = 0.10; % m
 blanking = 0.2; % m
 
 sen = load( [ filebase '.sen' ]);
@@ -41,6 +42,7 @@ heading = sen( :, 11); % deg M
 pitch = sen( :, 12); % deg
 roll = sen( :, 13); % deg
 pres = sen( :, 14); % dbar *** GAGE VALUE, NEEDS ATMOSPHERIC CORRECTION ***
+pres = pres + poffset;
 temp = sen( :, 15); % deg C
 
 % doppler data as arrays of time x cell: velocity (m/s), amplitude (cts), correlation (%)
@@ -73,9 +75,9 @@ v3 (exclude) = NaN;
 %ratio = size(exclude)./prod(size(u));
 
 
-% remove low tide pts (pressure cutoff)
+%remove low tide pts (pressure cutoff)
 for i=1:pts,
-    air = find( z > (pres(i)-.2), 1);
+    air = find( z > (pres(i)), 1);
     v1(i,air:cells) = NaN;
     v2(i,air:cells) = NaN;
     v3(i,air:cells) = NaN;
@@ -84,11 +86,6 @@ for i=1:pts,
     w(i,air:cells) = NaN;
     a(i,air:cells) = NaN;
 end
-
-%% ENU
-east = v1;
-north = v2;
-up = v3;
 
 
 %%
@@ -101,10 +98,10 @@ figure(2), clf, clear s
     
     
     s(1)=subplot(4,1,1);
-    pcolor(time,z',east'), 
+    pcolor(time,z',v1'), 
     shading interp,
     caxis([-1 1]),
-    colorbar;
+    cb = colorbar; cb.Label.String = 'v1 [m/s]';
     hold on,
     plot(time, pres, 'k.', 'MarkerSize', 2),
     %axis([ -inf inf 0 max(z) ]),
@@ -114,10 +111,10 @@ figure(2), clf, clear s
     title(prefix,'interpreter','none'), 
          
     s(2)=subplot(4,1,2);
-    pcolor(time,z',north'), 
+    pcolor(time,z',v2'), 
     shading interp,
     caxis([-1 1]),
-    colorbar;
+    cb = colorbar; cb.Label.String = 'v2 [m/s]';
     hold on,
     plot(time, pres, 'k.', 'MarkerSize', 2),
     %axis([ -inf inf 0 max(z) ]),
@@ -126,11 +123,10 @@ figure(2), clf, clear s
     ylabel('z (m)')
 
     s(3)=subplot(4,1,3);
-    pcolor(time,z',up'), 
+    pcolor(time,z',v3'), 
     shading interp,
     caxis([-1 1]),
-    colorbar;
-    hold on,
+    cb = colorbar; cb.Label.String = 'v3 [m/s]';    hold on,
     plot(time, pres, 'k.', 'MarkerSize', 2),
     %axis([ -inf inf 0 max(z) ]),
     datetick,
@@ -140,7 +136,7 @@ figure(2), clf, clear s
     s(4) = subplot(4,1,4);
     pcolor(time,z',a'), hold on
     shading flat
-    colorbar;
+    cb = colorbar; cb.Label.String = 'backscatter';    
     plot(time, pres, 'k.', 'MarkerSize', 2),
     datetick,
     axis tight
