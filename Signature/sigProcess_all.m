@@ -4,6 +4,8 @@
 %
 % Note that Burst and Average data usually are on different time steps
 %
+% Note also that wave processing relies on UVZwaves.m function from SWIFT codes repo
+%
 % J. Thomson, Sep 2020
 %       modibed from original AWAC processing (c. 2012)
 %       using SWIFT codes for wave processing (https://github.com/SASlabgroup/SWIFT-codes)
@@ -127,8 +129,8 @@ for fi=1:length(flist)
             v = filloutliers(v,'linear');
         end
 
-        %% wave processing
-        [ Hs, Tp, Dp, E, f, a1, b1, a2, b2, check] = UVZwaves(u, v, ast, rate); % assumes already east and north
+        %% wave processing, assuming [u.v] are already rotated to [east, north]
+        [ Hs, Tp, Dp, E, f, a1, b1, a2, b2, check] = UVZwaves(u, v, ast, rate); % function from SWIFT codes repo 
         if ~isnan(E),
             bt = polyfit(log(f(f>0.3)),log(E(f>0.3)),1);
             tailshape = bt(1);
