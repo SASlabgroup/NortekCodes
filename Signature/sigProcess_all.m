@@ -10,7 +10,7 @@
 %       modibed from original AWAC processing (c. 2012)
 %       using SWIFT codes for wave processing (https://github.com/SASlabgroup/SWIFT-codes)
 %       and parts of Sam Brenner signature processing suite (2018)
-%
+%   Oct 2025: remove screening of backscatter for ice bins
 
 clear all
 tic
@@ -18,10 +18,10 @@ tic
 
 %% Set constants and QC criteria
 %site = 'S1A1'; lat = 70.48695; lon = -162.28278; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
-%site = 'S2A1'; lat = 70.77422; lon = -149.47707; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
+site = 'S2A1'; lat = 70.77422; lon = -149.47707; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'NORSE'; lat = 70.831946; lon = -6.399105; doff=385; % NORSE mooring, stablemoor
-site = 'STBMup'; lat = 48.56280 ; lon = -122.76700 ; doff=45; % Rosario mooring, stablemoor
+%site = 'STBMup'; lat = 48.56280 ; lon = -122.76700 ; doff=45; % Rosario mooring, stablemoor
 
 
 despike = true;
@@ -40,7 +40,7 @@ icebincenters = [0:.5:10]; % meters
 
 dataDir = ['./'];
 
-fNameSigBase = ['S100793A017_STBMup_*.mat'];
+fNameSigBase = ['S100793A011_CODA_S2A1*.mat'];
 
 flist = dir([dataDir fNameSigBase ]);
 
@@ -57,7 +57,7 @@ for fi=1:length(flist)
     load([dataDir flist(fi).name]) % this ble will have N bursts and M averages
 
     %% deal with MIDAS export by adding fieldnames compliant with Sig export
-    if ~isfield(Data,'Burst_Time'),
+    if ~isfield(Data,'Burst_Time')
         disp('File from MIDAS')
         Data.Burst_Time = Data.Burst_MatlabTimeStamp;
         Data.Burst_AltimeterDistanceAST = Data.Burst_AltimeterAST;
@@ -116,7 +116,7 @@ for fi=1:length(flist)
 
 
         %% QC for out of water
-        if sigBurst(bcounter).depth < mindepth,
+        if sigBurst(bcounter).depth < mindepth
             badburst(bcounter)=true;
         else
             badburst(bcounter)=false;
@@ -163,7 +163,7 @@ for fi=1:length(flist)
 
         %% ice stats
         draft = sigBurst(bcounter).depth - mean(ast);
-        if draft > minicethickness & draft < maxicethickness,
+        if draft > minicethickness & draft < maxicethickness
             sigBurst(bcounter).icethickness = draft;
             sigBurst(bcounter).icehistogram.Nobs = hist( sigBurst(bcounter).depth - ast , icebincenters);
             sigBurst(bcounter).icehistogram.bincenters = icebincenters;
@@ -193,10 +193,10 @@ for fi=1:length(flist)
     Data.Average_VelNorth(trimcells) = NaN;
     Data.Average_VelUp1(trimcells) = NaN;
     Data.Average_VelUp2(trimcells) = NaN;
-    Data.Average_AmpBeam1(trimcells) = NaN;
-    Data.Average_AmpBeam2(trimcells) = NaN;
-    Data.Average_AmpBeam3(trimcells) = NaN;
-    Data.Average_AmpBeam4(trimcells) = NaN;
+    %Data.Average_AmpBeam1(trimcells) = NaN;
+    %Data.Average_AmpBeam2(trimcells) = NaN;
+    %Data.Average_AmpBeam3(trimcells) = NaN;
+    %Data.Average_AmpBeam4(trimcells) = NaN;
 
     % Find indices for each ensemble
     firstindex = find(Data.Average_EnsembleCount==1);
@@ -218,7 +218,7 @@ for fi=1:length(flist)
             sigAverage(acounter).depth = median(Data.Average_Pressure(AvgInd));
 
             %% QC for out of water
-            if sigAverage(acounter).depth < mindepth,
+            if sigAverage(acounter).depth < mindepth
                 badavg(acounter)=true;
             else
                 badavg(acounter)=false;
@@ -250,9 +250,9 @@ for fi=1:length(flist)
             %% ice products (if tracking enabled)
             sigAverage(acounter).icethickness = NaN;
 
-            if Config.Average_IceTrack(1:4) == 'True' & Config.Average_Altimeter(1:4) == 'True' % && ...
+            if Config.Average_IceTrack(1:4) == 'True' & Config.Average_Altimeter(1:4) == 'True' & ...
                 Config.Average_AltimeterEnd > sigAverage(acounter).depth
-                distance = mean( [Data.Average_AltimeterDistanceAST(AvgInd)' ]);
+                distance = median( [Data.Average_AltimeterDistanceAST(AvgInd)' ]);
                 %distance = mean( [Data.AverageIce_DistanceBeam1(AvgInd)' Data.AverageIce_DistanceBeam2(AvgInd)' ...
                 %Data.AverageIce_DistanceBeam3(AvgInd)' Data.AverageIce_DistanceBeam4(AvgInd)' ]); % if no altimeter
                 draft = sigAverage(acounter).depth - distance;
@@ -285,7 +285,7 @@ end % close file loop
 sigBurst(badburst) = [];
 
 %% bad avg QC
-for si=1:length(sigAverage),
+for si=1:length(sigAverage)
     if length(sigAverage(si).east) < length(sigAverage(si).z)
         badavg(si) = true;
     end
@@ -294,21 +294,21 @@ sigAverage(badavg) = [];
 
 %% trim velocity profiles for ice
 
-for sa = 1:length(sigAverage),
+for sa = 1:length(sigAverage)
     icecells = find( z > 0.6*(sigAverage(sa).depth - sigAverage(sa).icethickness) );
     sigAverage(sa).east( icecells  ) = NaN;
     sigAverage(sa).north( icecells  ) = NaN;
     sigAverage(sa).up( icecells  ) = NaN;
-    sigAverage(sa).backscatter1( icecells  ) = NaN;
-    sigAverage(sa).backscatter2( icecells  ) = NaN;
-    sigAverage(sa).backscatter3( icecells  ) = NaN;
-    sigAverage(sa).backscatter4( icecells  ) = NaN;
+    %sigAverage(sa).backscatter1( icecells  ) = NaN;
+    %sigAverage(sa).backscatter2( icecells  ) = NaN;
+    %sigAverage(sa).backscatter3( icecells  ) = NaN;
+    %sigAverage(sa).backscatter4( icecells  ) = NaN;
 end
 
 %% remove peak direction if spread too large or waves too small (SNR problem)
 
 
-for si=1:length(sigBurst),
+for si=1:length(sigBurst)
     [m fpindex] = min( abs( sigBurst(si).peakwaveperiod - sigBurst(si).wavespectra.freq ) );
     a1 = sigBurst(si).wavespectra.a1(fpindex);
     b1 = sigBurst(si).wavespectra.b1(fpindex);
@@ -358,6 +358,7 @@ plot([sigBurst.time],[sigBurst.icethickness],'bo',[sigAverage.time],[sigAverage.
 datetick
 cb = colorbar; set(cb,'Visible','off')
 ylabel('Ice [m]')
+set(gca,'YLim',[0 5])
 
 
 ax(3) = subplot(panels,1,3); % temperature
