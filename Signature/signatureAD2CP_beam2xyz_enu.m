@@ -1,19 +1,25 @@
-function [ Data, Config, T_beam2xyz ] = signatureAD2CP_beam2xyz_enu( Data, Config, mode, twoZs )
+function [ Data, Config, T_beam2xyz ] = signatureAD2CP_beam2xyz_enu( Data, Config, mode, twoZs, declination )
 
 if nargin == 3
 	twoZs = 0;
 end
 
-%ad2cpstr = 'AD2CP_';
+ad2cpstr = 'AD2CP_';
 ad2cpstr = '';
 
 if strcmpi( mode, 'avg' )
 	dataModeWord = 'Average';
 	configModeWord = 'avg';
+elseif strcmpi( mode, 'avg1' )
+	dataModeWord = 'Alt_Average';
+	configModeWord = 'avg1';
+elseif strcmpi( mode, 'burst1' )
+	dataModeWord = 'Alt_Burst';
+	configModeWord = 'burst1';
 elseif strcmpi( mode, 'burst' )
 	dataModeWord = 'Burst';
 	configModeWord = 'burst';
-end
+end 
 
 % make the assumption the beam mapping is the same for all measurements in a data file
 activeBeams = Data.( [dataModeWord '_Physicalbeam'] )( 1, : );
@@ -24,80 +30,32 @@ if numberOfBeams <= 2
 	T_beam2xyz = nan;
 	return
 end
-% assume max number of beams involved is 4, extra rows removed later
-beamVectorsSpherical = zeros( 4, 3 );
 
-for i = activeBeams
-	beamVectorsSpherical( i, : ) = [ 1, ...
-		Config.( [ad2cpstr 'BeamCfg' num2str( i ) '_theta' ] ), ...
-		Config.( [ad2cpstr 'BeamCfg' num2str( i ) '_phi' ] ) ];
+
+beam2xyz_vec = Config.([ad2cpstr configModeWord '_beam2xyz'] );
+if numberOfBeams == 4,
+    T_beam2xyz = [beam2xyz_vec(1:4); beam2xyz_vec(5:8); beam2xyz_vec(9:12); beam2xyz_vec(13:16)];
+else
+    if numberOfBeams == 3,
+        T_beam2xyz = [beam2xyz_vec(1:3); beam2xyz_vec(4:6); beam2xyz_vec(7:9)];        
+    end
 end
 
-disp(beamVectorsSpherical)
-
-if numberOfBeams == 3
-	% for a three beam system, translate the beam vectors expressed in spherical coordinates
-	% into beam vectors in Cartesian coordinates
-
-	% first transform from spherical to cartesian coordinates
-	for i = activeBeams
-		beamVectorsCartesian( i, : ) = [ ...
-			sind( beamVectorsSpherical( i, 2 ) ) * cosd( beamVectorsSpherical( i, 3 ) ), ...
-			sind( beamVectorsSpherical( i, 2 ) ) * sind( beamVectorsSpherical( i, 3 ) ), ...
-			cosd( beamVectorsSpherical( i, 2 ) ) ];
-	end
-
-	cartesianTransformCheck = sum( beamVectorsCartesian.^2, 2 );
-	% remove any extra rows for inactive beams
-	beamVectorsCartesian( cartesianTransformCheck == 0, : ) = [];
-	
-	T_beam2xyz = inv( beamVectorsCartesian );
-
-elseif numberOfBeams == 4
-	if twoZs == 0
-		% for a four beam system, translate the beam vectors expressed in spherical coordinates
-		% into beam vectors in Cartesian coordinates, using only three basis vectors
-		for i = 1:numberOfBeams
-			beamVectorsCartesian( i, : ) = [ ...
-				sind( beamVectorsSpherical( i, 2 ) ) * cosd( beamVectorsSpherical( i, 3 ) ), ...
-				sind( beamVectorsSpherical( i, 2 ) ) * sind( beamVectorsSpherical( i, 3 ) ), ...
-				cosd( beamVectorsSpherical( i, 2 ) ) ];
-		end
-		cartesianTransformCheck = sum( beamVectorsCartesian.^2, 2 );
-
-		% pseudo inverse needs to be used because beamVectorsCartesian isn't square
-		T_beam2xyz = pinv( beamVectorsCartesian );
-
-	else
-		% this section makes two estimates of the vertical velocity
-		for i = 1:numberOfBeams
-			if i == 1 | i == 3
-				beamVectorsCartesianzz( i, : ) = [ ...
-					beamVectorsSpherical( i, 1 ) * sind( beamVectorsSpherical( i, 2 ) ) * cosd( beamVectorsSpherical( i, 3 ) ), ...
-					-1 * beamVectorsSpherical( i, 1 ) * sind( beamVectorsSpherical( i, 2 ) ) * sind( beamVectorsSpherical( i, 3 ) ), ...
-					beamVectorsSpherical( i, 1 ) * cosd( beamVectorsSpherical( i, 2 ) ), ...
-					0 ];
-			else
-				beamVectorsCartesianzz( i, : ) = [ ...
-					beamVectorsSpherical( i, 1 ) * sind( beamVectorsSpherical( i, 2 ) ) * cosd( beamVectorsSpherical( i, 3 ) ), ...
-					-1 * beamVectorsSpherical( i, 1 ) * sind( beamVectorsSpherical( i, 2 ) ) * sind( beamVectorsSpherical( i, 3 ) ), ...
-					0, ...
-					beamVectorsSpherical( i, 1 ) * cosd( beamVectorsSpherical( i, 2 ) ) ];
-			end
-		end
-		cartesianTransformCheck = sum( beamVectorsCartesianzz.^2, 2 );
-
-		% there should be an inverse for this, no pseudoinverse needed
-		T_beam2xyz = inv( beamVectorsCartesianzz );
-
-		% Can also add in a row for the error velocity calculation, 
-		% as the difference between the two vertical velcoities
-		% T_beam2xyz( end + 1, : ) = T_beam2xyzz( 3, : ) - T_beam2xyzz( 4, : );
-		% note the addition of the error velocity row changes the inversion of the matrix, it
-		% needs to be removed to recover the xyz2beam matrix.
-	end
+% Special case
+if strcmp(Config.instrumentName, 'Signature55kHz'),
+    T_beam2xyz =[   1.9492   -0.9746   -0.9746; ...
+             0   -1.6881    1.6881; ...
+        0.3547    0.3547    0.3547];
 end
 
+if Config.fwVersionDoppler <= 2163 && numberOfBeams == 4,
+    % Fix bug in transformation matrix in version 2163
+    T_beam2xyz(2,:) = -T_beam2xyz(2,:);
+end
+
+
+disp(T_beam2xyz)
+   
 % verify we're not already in 'xyz'
 if strcmpi( Config.( [ ad2cpstr configModeWord '_coordSystem' ] ), 'xyz' )
 	disp( 'Velocity data is already in xyz coordinate system.' )
@@ -126,7 +84,7 @@ for nCell = 1:Config.( [ad2cpstr  configModeWord '_nCells' ] )
 	end
 end
 
-Config.( [ad2cpstr   configModeWord '_coordSystem' ] ) = 'xyz';
+Config.( [ad2cpstr   configModeWord '_coordSystemXYZ' ] ) = 'xyz';
 Data.( [ dataModeWord '_VelX' ] ) = xAllCells;
 Data.( [ dataModeWord '_VelY' ] ) = yAllCells;
 
@@ -160,26 +118,64 @@ Name = ['X','Y','Z'];
 ENU = zeros( K, Config.([ad2cpstr   configModeWord '_nCells' ]));
 xyz = zeros( K, Config.([ad2cpstr   configModeWord '_nCells' ]));
 for sampleIndex = 1:length(Data.( [dataModeWord  '_Error' ]));
-   if (bitand(bitshift(uint32(Data.( [dataModeWord  '_Status' ])(sampleIndex)), -25),7) == 5)
+   orientation = bitand(bitshift(uint32(Data.( [dataModeWord  '_Status' ])(sampleIndex)), -25),7);
+   if (orientation == 5)
       signXYZ=[1 -1 -1 -1];
    else
       signXYZ=[1 1 1 1];
    end
 
-   hh = pi*(Data.([dataModeWord  '_Heading'])(sampleIndex)-90)/180;
-   pp = pi*Data.([dataModeWord  '_Pitch'])(sampleIndex)/180;
-   rr = pi*Data.([dataModeWord  '_Roll'])(sampleIndex)/180;
+   if (orientation == 7)
+      % AHRS
+      xyz2enuAHRS = transpose(reshape(Data.([dataModeWord  '_AHRSRotationMatrix'])(sampleIndex,:),3,3));
+      
+      % Apply declination      
+      % Make declination rotation matrix
+      H = [cosd(declination) sind(declination) 0; -sind(declination) cosd(declination) 0; 0 0 1];
+      xyz2enuAHRSdecl = H*xyz2enuAHRS;
+      
+      % Update the transformation matrix
+      Data.([dataModeWord  '_AHRSRotationMatrix'])(sampleIndex,:)=reshape(transpose(xyz2enuAHRSdecl),1,9);
+      
+      % Update the heading value
+      heading = 90-(atan2(xyz2enuAHRSdecl(2,1),xyz2enuAHRSdecl(1,1))*180/pi);
+      if heading < 0,
+         heading = heading + 360;
+      end
+      if heading >= 360,
+         heading = heading - 360;
+      end
+      Data.([dataModeWord  '_Heading'])(sampleIndex) = heading;
+      
+      xyz2enu = xyz2enuAHRSdecl;
+      
+   else
+      % Apply declination
+      heading = Data.([dataModeWord  '_Heading'])(sampleIndex) + declination;
+      if heading < 0,
+         heading = heading + 360;
+      end
+      if heading >= 360,
+         heading = heading - 360;
+      end
+      Data.([dataModeWord  '_Heading'])(sampleIndex) = heading;
+      
+      % Regular compass
+      hh = pi*(Data.([dataModeWord  '_Heading'])(sampleIndex)-90)/180;
+      pp = pi*Data.([dataModeWord  '_Pitch'])(sampleIndex)/180;
+      rr = pi*Data.([dataModeWord  '_Roll'])(sampleIndex)/180;
 
-   % Make heading matrix
-   H = [cos(hh) sin(hh) 0; -sin(hh) cos(hh) 0; 0 0 1];
+      % Make heading matrix
+      H = [cos(hh) sin(hh) 0; -sin(hh) cos(hh) 0; 0 0 1];
 
-   % Make tilt matrix
-   P = [cos(pp) -sin(pp)*sin(rr) -cos(rr)*sin(pp);...
-         0             cos(rr)          -sin(rr);  ...
-         sin(pp) sin(rr)*cos(pp)  cos(pp)*cos(rr)];
+      % Make tilt matrix
+      P = [cos(pp) -sin(pp)*sin(rr) -cos(rr)*sin(pp);...
+            0             cos(rr)          -sin(rr);  ...
+            sin(pp) sin(rr)*cos(pp)  cos(pp)*cos(rr)];
 
-   % Make resulting transformation matrix
-   xyz2enu = H*P; 
+      % Make resulting transformation matrix
+      xyz2enu = H*P; 
+   end
    if (twoZs == 1)
       xyz2enu(1,3) = xyz2enu(1,3)/2;
       xyz2enu(1,4) = xyz2enu(1,3);
@@ -208,7 +204,7 @@ for sampleIndex = 1:length(Data.( [dataModeWord  '_Error' ]));
       U2AllCells( sampleIndex, : ) = ENU( 4, : )';
       end
 end
-Config.( [ad2cpstr   configModeWord '_coordSystem' ] ) = 'enu';
+Config.( [ad2cpstr   configModeWord '_coordSystemENU' ] ) = 'enu';
 Data.( [ dataModeWord '_VelEast' ] ) = EAllCells;
 Data.( [ dataModeWord '_VelNorth' ] ) = NAllCells;
 if twoZs == 1

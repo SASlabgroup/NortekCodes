@@ -3,6 +3,8 @@
 % with coordinate rotations to ENU already included in the export
 %
 % Note that Burst and Average data usually are on different time steps
+% but average data are included in burst mat files exported from Nortek Software
+% (so run this in a directory with only burst expored files and everything will get processed)
 %
 % Note also that wave processing relies on UVZwaves.m function from SWIFT codes repo
 %
@@ -10,39 +12,48 @@
 %       modibed from original AWAC processing (c. 2012)
 %       using SWIFT codes for wave processing (https://github.com/SASlabgroup/SWIFT-codes)
 %       and parts of Sam Brenner signature processing suite (2018)
-%   Oct 2025: remove screening of backscatter for ice bins
+%   Oct 2025: remove screening of backscatter for ice bins, 
+%       keep ice histograms and wave spectra regardless of QC
+%
 
 clear all
 tic
 
 
-%% Set constants and QC criteria
+%% Site and file info
 %site = 'S1A1'; lat = 70.48695; lon = -162.28278; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
-site = 'S2A1'; lat = 70.77422; lon = -149.47707; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
-%site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
+%site = 'S2A1'; lat = 70.77422; lon = -149.47707; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
+site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'NORSE'; lat = 70.831946; lon = -6.399105; doff=385; % NORSE mooring, stablemoor
 %site = 'STBMup'; lat = 48.56280 ; lon = -122.76700 ; doff=45; % Rosario mooring, stablemoor
 
 
-despike = true;
-mindepth = 4;
-mincorr = 40; % broadband Doppler correlation
-maxwaveperiod = 8; % max wave period allowed during final screening, usually 20 s
-minwaveperiod = 1; % min wave period allowed during final screening, usually 2 s 
-minicethickness = 2; % min ice thickness considered valid during final screening, usually 0.2 (0.1 m is barometric noise)
-maxicethickness = 20; % min ice thickness considered valid during final screening, usually 20
-minwaveheight = 0.01; % smallest wave height observable, usually 0.2 m 
-minwaveheightfordir = 5; % smallest wave height for directional estimates, usually set to 1 m
-maxtailshapeexponent = -2.5;  % max value for f^q in the tail (f> 0.3 Hz), theoretically -4 
-icebincenters = [0:.5:10]; % meters
-
-%% Load data
-
 dataDir = ['./'];
 
-fNameSigBase = ['S100793A011_CODA_S2A1*.mat'];
+fNameSigBase = ['S100337A006_CODA_S3A1.ad2cp.00000_*.mat'];
 
 flist = dir([dataDir fNameSigBase ]);
+
+%% QC criteria
+
+despike = true;  % option to despike raw AST (acoustic surface tracking) for waves and ice
+trimvelocity = true;  % option to trim velocity profiles for ice draft... usually redundant to trim for surface reflections
+plotAST = false;  % option to plot AST
+removeiceoutliers = true; % remove final ice products that are outliers
+
+mindepth = 4; % minimum depth to process
+mincorr = 40; % broadband Doppler correlation
+
+minicethickness = 0.2; % min ice thickness considered valid during final screening, usually 0.2 (0.1 m is barometric noise)
+maxicethickness = 20; % max ice thickness considered valid during final screening, usually 20
+maxicespeed = 2; % limit on ice drift tracking esimate (m/s)
+icebincenters = [0:.5:10]; % meters
+
+maxwaveperiod = 20; % max wave period allowed during final screening, usually 20 s
+minwaveperiod = 1; % min wave period allowed during final screening, usually 2 s
+minwaveheight = 0.1; % smallest wave height observable, usually 0.2 m
+minwaveheightfordir = 1; % smallest wave height for directional estimates, usually set to 1 m
+maxtailshapeexponent = -3;  % max value for f^q in the tail (f> 0.3 Hz), theoretically -4
 
 
 
@@ -71,11 +82,18 @@ for fi=1:length(flist)
         Data.Average_NCells = Config.avg_nCells;
         Data.Average_Time = Data.Average_MatlabTimeStamp;
         Data.Average_Temperature = Data.Average_WaterTemperature;
-        Config.Average_IceTrack = Config.avg_ice;
+        Config.Average_IceTrack = 'True'; %Config.avg_ice;
+        Config.Average_Altimeter = 'True';
+        Config.Average_AltimeterEnd = inf;
+        Data.Average_AltimeterDistanceAST = Data.Average_AltimeterIceAST;
         Data = sigBeamMapping(Data,Config,'burst','enu');  % use Sam Brenner's code for ENU of the burst data (or assign NaN)
         %Data.Burst_VelEast = NaN(size(Data.Burst_VelBeam1));  % ENU are not part of MIDAS export!
         %Data.Burst_VelNorth = NaN(size(Data.Burst_VelBeam1));  % ENU are not part of MIDAS export!
     end
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%  BURST MODE DATA  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
     %% Loop through bursts (of that file) making wave and ice products
 
@@ -92,6 +110,7 @@ for fi=1:length(flist)
         burstInd = firstindex(b) + [1:spacing] - 1;
         burstInd( burstInd > length(Data.Burst_Time) ) = [];
         ast = double( Data.Burst_AltimeterDistanceAST(burstInd) );
+        if plotAST, figure(1), clf, hist(ast), drawnow, end
         range = Config.Burst_BlankingDistance + Config.Burst_CellSize*[1:Config.Burst_NCells];
         velindex = find(range < min(ast),1,'last'); % bin of burst velocity profile to use in wave processing
         if isempty(velindex), velindex = 1; end
@@ -117,9 +136,9 @@ for fi=1:length(flist)
 
         %% QC for out of water
         if sigBurst(bcounter).depth < mindepth
-            badburst(bcounter)=true;
+            dryburst(bcounter)=true;
         else
-            badburst(bcounter)=false;
+            dryburst(bcounter)=false;
         end
 
         %% despike raw before wave and ice processing
@@ -130,7 +149,8 @@ for fi=1:length(flist)
         end
 
         %% wave processing, assuming [u.v] are already rotated to [east, north]
-        [ Hs, Tp, Dp, E, f, a1, b1, a2, b2, check] = UVZwaves(u, v, ast, rate); % function from SWIFT codes repo 
+        if length(ast) > 1000
+        [ Hs, Tp, Dp, E, f, a1, b1, a2, b2, check] = UVZwaves(u, v, ast, rate); % function from SWIFT codes repo
         if ~isnan(E),
             bt = polyfit(log(f(f>0.3)),log(E(f>0.3)),1);
             tailshape = bt(1);
@@ -141,24 +161,18 @@ for fi=1:length(flist)
             sigBurst(bcounter).sigwaveheight = Hs;
             sigBurst(bcounter).peakwaveperiod = Tp;
             sigBurst(bcounter).peakwavedirT = Dp;
-            sigBurst(bcounter).wavespectra.energy = E';
-            sigBurst(bcounter).wavespectra.freq = f';
-            sigBurst(bcounter).wavespectra.a1 = a1';
-            sigBurst(bcounter).wavespectra.b1 = b1';
-            sigBurst(bcounter).wavespectra.a2 = a2';
-            sigBurst(bcounter).wavespectra.b2 = b2';
-            sigBurst(bcounter).wavespectra.check = check';
         else
             sigBurst(bcounter).sigwaveheight = NaN;
             sigBurst(bcounter).peakwaveperiod = NaN;
             sigBurst(bcounter).peakwavedirT = NaN;
-            sigBurst(bcounter).wavespectra.energy = NaN(size(E'));
-            sigBurst(bcounter).wavespectra.freq = NaN(size(f'));
-            sigBurst(bcounter).wavespectra.a1 = NaN(size(a1'));
-            sigBurst(bcounter).wavespectra.b1 = NaN(size(b1'));
-            sigBurst(bcounter).wavespectra.a2 = NaN(size(a2'));
-            sigBurst(bcounter).wavespectra.b2 = NaN(size(b2'));
-            sigBurst(bcounter).wavespectra.check = NaN(size(check'));
+        end
+        sigBurst(bcounter).wavespectra.energy = E';
+        sigBurst(bcounter).wavespectra.freq = f';
+        sigBurst(bcounter).wavespectra.a1 = a1';
+        sigBurst(bcounter).wavespectra.b1 = b1';
+        sigBurst(bcounter).wavespectra.a2 = a2';
+        sigBurst(bcounter).wavespectra.b2 = b2';
+        sigBurst(bcounter).wavespectra.check = check';
         end
 
         %% ice stats
@@ -177,6 +191,9 @@ for fi=1:length(flist)
         bcounter = bcounter+1;
 
     end % close burst loop for that file
+
+
+    %%%%%%%%%%%%%%%%%%%%%% AVERAGE MODE DATA %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
     %% loop through Avgd ensembles (of that file) making profiles and ice
@@ -224,7 +241,7 @@ for fi=1:length(flist)
                 badavg(acounter)=false;
             end
 
-            %% profiles
+            %% avg profiles
             sigAverage(acounter).z = z;
             if size(Data.Average_VelEast,1) == 1 % check if ENU needs to be reshaped (as in NORSE, but not CODA)
                 checklength = length(Data.Average_Time) * length(z) - size(Data.Average_VelEast,2);
@@ -247,26 +264,35 @@ for fi=1:length(flist)
             sigAverage(acounter).backscatter3 = nanmean( Data.Average_AmpBeam3(AvgInd,:) );
             sigAverage(acounter).backscatter4 = nanmean( Data.Average_AmpBeam4(AvgInd,:) );
 
-            %% ice products (if tracking enabled)
+            %% avg ice products (if tracking enabled)
             sigAverage(acounter).icethickness = NaN;
 
             if Config.Average_IceTrack(1:4) == 'True' & Config.Average_Altimeter(1:4) == 'True' & ...
-                Config.Average_AltimeterEnd > sigAverage(acounter).depth
-                distance = median( [Data.Average_AltimeterDistanceAST(AvgInd)' ]);
+                    Config.Average_AltimeterEnd > sigAverage(acounter).depth
+                ast = Data.Average_AltimeterDistanceAST(AvgInd)';
+                if despike
+                    ast = filloutliers(ast,'linear');
+                end
+                distance = mean(ast);
                 %distance = mean( [Data.AverageIce_DistanceBeam1(AvgInd)' Data.AverageIce_DistanceBeam2(AvgInd)' ...
                 %Data.AverageIce_DistanceBeam3(AvgInd)' Data.AverageIce_DistanceBeam4(AvgInd)' ]); % if no altimeter
                 draft = sigAverage(acounter).depth - distance;
-                if draft>minicethickness & draft<maxicethickness & isfield(Data,'AverageIce_VelSpeed'),
+                if draft>minicethickness & draft<maxicethickness & isfield(Data,'AverageIce_VelSpeed')
                     sigAverage(acounter).icethickness = draft;
                     sigAverage(acounter).icespeed = mean( Data.AverageIce_VelSpeed(AvgInd) );
                     sigAverage(acounter).icedir = mean( Data.AverageIce_VelDirection(AvgInd) );
+                    sigAverage(acounter).icehistogram.Nobs = hist( sigAverage(acounter).depth - ast, icebincenters);
+                    sigAverage(acounter).icehistogram.bincenters = icebincenters;
                 else
                     sigAverage(acounter).icethickness = NaN;
                     sigAverage(acounter).icespeed = NaN;
                     sigAverage(acounter).icedir = NaN;
+                    sigAverage(acounter).icehistogram.Nobs = NaN(size(icebincenters));
+                    sigAverage(acounter).icehistogram.bincenters = NaN(size(icebincenters));
                 end
             else
             end
+
 
             %% increment the overall average counter
             acounter = acounter+1;
@@ -277,12 +303,14 @@ for fi=1:length(flist)
     end % close Avgd loop
 
 
-
-
 end % close file loop
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%   CLEAN UP  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 %% apply burst QC
-sigBurst(badburst) = [];
+sigBurst(dryburst) = [];
 
 %% bad avg QC
 for si=1:length(sigAverage)
@@ -292,18 +320,6 @@ for si=1:length(sigAverage)
 end
 sigAverage(badavg) = [];
 
-%% trim velocity profiles for ice
-
-for sa = 1:length(sigAverage)
-    icecells = find( z > 0.6*(sigAverage(sa).depth - sigAverage(sa).icethickness) );
-    sigAverage(sa).east( icecells  ) = NaN;
-    sigAverage(sa).north( icecells  ) = NaN;
-    sigAverage(sa).up( icecells  ) = NaN;
-    %sigAverage(sa).backscatter1( icecells  ) = NaN;
-    %sigAverage(sa).backscatter2( icecells  ) = NaN;
-    %sigAverage(sa).backscatter3( icecells  ) = NaN;
-    %sigAverage(sa).backscatter4( icecells  ) = NaN;
-end
 
 %% remove peak direction if spread too large or waves too small (SNR problem)
 
@@ -320,7 +336,54 @@ for si=1:length(sigBurst)
     spread2(si) = sqrt( abs( 0.5 - 0.5 .* ( a2.*cos(2.*dir2(si)) + b2.*cos(2.*dir2(si)) )  ));
     if 180/3.14*spread1(si) > 85 | sigBurst(si).sigwaveheight < minwaveheightfordir | isnan( sigBurst(si).sigwaveheight )
         sigBurst(si).peakwavedirT=NaN;
-    end,
+    end
+end
+
+%% remove ice speeds that are unrealistically fast
+
+badicespeed = find( [sigAverage.icespeed] > maxicespeed );
+for bi = badicespeed
+    sigAverage(bi).icespeed = NaN;
+    sigAverage(bi).icedir = NaN;
+end
+
+
+%% remove ice thickness outliers (but keep all ice histograms)
+
+windowlength = 100; 
+
+if removeiceoutliers
+    badBurstice = find(isoutlier([sigBurst.icethickness],'movmean',windowlength));
+    for bi = badBurstice
+        sigBurst(bi).icethickness = NaN;
+    end
+
+    badAverageice = find(isoutlier([sigAverage.icethickness],'movmean',windowlength));
+    for bi = badAverageice
+        sigAverage(bi).icethickness = NaN;
+        sigAverage(bi).icespeed = NaN;
+        sigAverage(bi).icedir = NaN;
+    end
+
+end
+
+%% trim velocity profiles for ice... recalc the surface reflection limits
+
+if trimvelocity
+
+    for sa = 1:length(sigAverage)
+        effectivedepth = (sigAverage(sa).depth - sigAverage(sa).icethickness);
+        effectiverange = effectivedepth * cosd(beamangle); 
+        icecells = find( (z - doff ) + Config.Average_CellSize  > effectiverange );
+        sigAverage(sa).east( icecells  ) = NaN;
+        sigAverage(sa).north( icecells  ) = NaN;
+        sigAverage(sa).up( icecells  ) = NaN;
+        %sigAverage(sa).backscatter1( icecells  ) = NaN;
+        %sigAverage(sa).backscatter2( icecells  ) = NaN;
+        %sigAverage(sa).backscatter3( icecells  ) = NaN;
+        %sigAverage(sa).backscatter4( icecells  ) = NaN;
+    end
+
 end
 
 %% sort results
@@ -336,17 +399,17 @@ save( [site '_Signature_all_processed.mat'], 'sigBurst','sigAverage','site');
 
 toc
 
-%% plots
+%% summary plot
 
 panels = 6;
 chunks = find(diff([sigAverage.time])>1/24); % indices of contiguous data chunks (for pcolors)
 nc = length(chunks) + 1; % number of chunks
 chunks = [0 chunks length([sigAverage.time])];
 
-figure(1), clf
+figure(100), clf
 
 ax(1) = subplot(panels,1,1); % wave heights
-plot([sigBurst.time],[sigBurst.sigwaveheight],'.')
+plot([sigBurst.time],[sigBurst.sigwaveheight],'b-')
 datetick
 set(gca,'YLim',[0 1.1*max([sigBurst.sigwaveheight])])
 cb = colorbar; set(cb,'Visible','off')
@@ -354,19 +417,19 @@ ylabel('H_s [m]')
 title(site)
 
 ax(2) = subplot(panels,1,2); % ice draft
-plot([sigBurst.time],[sigBurst.icethickness],'bo',[sigAverage.time],[sigAverage.icethickness],'g.')
+plot([sigBurst.time],[sigBurst.icethickness],'b-',[sigAverage.time],[sigAverage.icethickness],'g--')
 datetick
 cb = colorbar; set(cb,'Visible','off')
 ylabel('Ice [m]')
-set(gca,'YLim',[0 5])
+legend('burst','average')
 
 
 ax(3) = subplot(panels,1,3); % temperature
-plot([sigBurst.time],[sigBurst.watertemp],'bo',[sigAverage.time],[sigAverage.watertemp],'g.')
+plot([sigBurst.time],[sigBurst.watertemp],'b-',[sigAverage.time],[sigAverage.watertemp],'m--')
 datetick
 %set(gca,'YLim',[-2 15])
 cb = colorbar; set(cb,'Visible','off')
-ylabel('T [C]')
+ylabel('Temperature [C]')
 
 for ci = 1:nc
     thisc = [ (chunks(ci)+1) : chunks(ci+1) ];
@@ -376,6 +439,7 @@ for ci = 1:nc
         length(sigAverage(thisc(1)).z),length([sigAverage(thisc).time])))
     hold on
     plot([sigAverage(thisc).time],[sigAverage(thisc).depth],'k-')
+    plot([sigAverage(thisc).time],[sigAverage(thisc).depth]-[sigAverage(thisc).icethickness],'g-')
     set(gca,'YLim',[0 1.1*max([sigAverage.depth])+1])
     shading flat
     datetick
@@ -389,6 +453,7 @@ for ci = 1:nc
         length(sigAverage(thisc(1)).z),length([sigAverage(thisc).time])))
     hold on
     plot([sigAverage(thisc).time],[sigAverage(thisc).depth],'k-')
+    plot([sigAverage(thisc).time],[sigAverage(thisc).depth]-[sigAverage(thisc).icethickness],'g-')
     set(gca,'YLim',[0 1.1*max([sigAverage.depth])+1])
     shading flat
     datetick
@@ -407,7 +472,7 @@ for ci = 1:nc
     datetick
     ylabel(['z [m]'])
     %caxis([-.5 .5])
-    cb = colorbar; cb.Label.String = 'Echo [dB]';
+    cb = colorbar; cb.Label.String = 'Backscatter [dB]';
 
 end
 
@@ -415,5 +480,60 @@ linkaxes(ax,'x')
 
 print('-dpng',[site '_Signature_all_processed.png'])
 savefig([site '_Signature_all_processed.fig'])
+
+%% ice plot
+
+figure(101), clf
+colormap gray
+cmap = colormap;
+cmap = flipud(cmap);
+colormap(cmap)
+
+clear N
+d = sigBurst(1).icehistogram.bincenters;
+for si=1:length(sigBurst)
+    N(si,:) = sigBurst(si).icehistogram.Nobs;
+end
+
+iceax(1) = subplot(3,1,1);
+pcolor([sigBurst.time],d,N'), hold on, shading flat
+%plot([sigBurst.time],[sigBurst.icethickness],'bo')
+datetick
+ylabel('ice thickness [m]')
+title('Burst mode')
+cb=colorbar;
+cb.Label.String = 'N observations';
+
+clear N
+d = sigAverage(1).icehistogram.bincenters;
+for si=1:length(sigAverage)
+    N(si,:) = sigAverage(si).icehistogram.Nobs;
+end
+
+iceax(2) = subplot(3,1,2);
+pcolor([sigAverage.time],d,N'), hold on , shading flat
+%plot([sigAverage.time],[sigAverage.icethickness],'g.')
+datetick
+ylabel('ice thickness [m]')
+title('Avg mode')
+cb=colorbar;
+cb.Label.String = 'N observations';
+
+iceax(3) = subplot(3,1,3);
+%quiver([sigAverage.time],0,[sigAverage.icespeed].*sind([sigAverage.icedir]), [sigAverage.icespeed].*cosd([sigAverage.icedir]))
+plot([sigAverage.time],[sigAverage.icespeed],'.')
+datetick
+ylabel('ice drift [m/s]')
+title('Avg mode')
+cb=colorbar;
+cb.Visible = 'off';
+
+linkaxes(iceax,'x');
+
+print('-dpng',[site '_Signature_ice.png'])
+savefig([site '_Signature_ice.fig'])
+
+%% use plotSWIFT (from SWIFTcodes repo) to plot more wave details
+%plotSWIFT(sigBurst)
 
 
