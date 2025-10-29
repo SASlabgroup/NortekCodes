@@ -21,18 +21,19 @@ tic
 
 
 %% Site and file info
-%site = 'S1A1'; lat = 70.48695; lon = -162.28278; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
+site = 'S1A1'; lat = 70.48695; lon = -162.28278; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'S2A1'; lat = 70.77422; lon = -149.47707; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
-site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
+%site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'NORSE'; lat = 70.831946; lon = -6.399105; doff=385; % NORSE mooring, stablemoor
 %site = 'STBMup'; lat = 48.56280 ; lon = -122.76700 ; doff=45; % Rosario mooring, stablemoor
 
 
 dataDir = ['./'];
 
-fNameSigBase = ['S100337A006_CODA_S3A1.ad2cp.00000_*.mat'];
+fNameSigBase = ['CODA_S1A1_Sig_2020_*.mat'];
 
 flist = dir([dataDir fNameSigBase ]);
+if length(flist) < 1, disp('*** no files, check fNameSigBase ***'), return, end
 
 %% QC criteria
 
@@ -69,7 +70,7 @@ for fi=1:length(flist)
 
     %% deal with MIDAS export by adding fieldnames compliant with Sig export
     if ~isfield(Data,'Burst_Time')
-        disp('File from MIDAS')
+        disp('File from MIDAS, changing fieldnames to accomodate')
         Data.Burst_Time = Data.Burst_MatlabTimeStamp;
         Data.Burst_AltimeterDistanceAST = Data.Burst_AltimeterAST;
         Config.Burst_BlankingDistance = Config.burst_blankingDistance;
@@ -149,9 +150,16 @@ for fi=1:length(flist)
         end
 
         %% wave processing, assuming [u.v] are already rotated to [east, north]
-        if length(ast) > 1000
+        
+        [ Hpres, Tpres, Hig, Tig, Epres, fpres ] = Pwaves(Data.Burst_Pressure(burstInd), rate);
+        sigBurst(bcounter).IGwaveheight = Hig;
+        sigBurst(bcounter).IGwaveperiod = Tig;
+        sigBurst(bcounter).presspectra.energy = Epres';
+        sigBurst(bcounter).presspectra.freq = fpres';
+        
         [ Hs, Tp, Dp, E, f, a1, b1, a2, b2, check] = UVZwaves(u, v, ast, rate); % function from SWIFT codes repo
-        if ~isnan(E),
+        
+        if ~isnan(E)
             bt = polyfit(log(f(f>0.3)),log(E(f>0.3)),1);
             tailshape = bt(1);
         else
@@ -161,6 +169,7 @@ for fi=1:length(flist)
             sigBurst(bcounter).sigwaveheight = Hs;
             sigBurst(bcounter).peakwaveperiod = Tp;
             sigBurst(bcounter).peakwavedirT = Dp;
+
         else
             sigBurst(bcounter).sigwaveheight = NaN;
             sigBurst(bcounter).peakwaveperiod = NaN;
@@ -173,7 +182,6 @@ for fi=1:length(flist)
         sigBurst(bcounter).wavespectra.a2 = a2';
         sigBurst(bcounter).wavespectra.b2 = b2';
         sigBurst(bcounter).wavespectra.check = check';
-        end
 
         %% ice stats
         draft = sigBurst(bcounter).depth - mean(ast);
@@ -281,6 +289,12 @@ for fi=1:length(flist)
                     sigAverage(acounter).icethickness = draft;
                     sigAverage(acounter).icespeed = mean( Data.AverageIce_VelSpeed(AvgInd) );
                     sigAverage(acounter).icedir = mean( Data.AverageIce_VelDirection(AvgInd) );
+                    sigAverage(acounter).icehistogram.Nobs = hist( sigAverage(acounter).depth - ast, icebincenters);
+                    sigAverage(acounter).icehistogram.bincenters = icebincenters;
+                elseif draft>minicethickness & draft<maxicethickness & ~isfield(Data,'AverageIce_VelSpeed')
+                    sigAverage(acounter).icethickness = draft;
+                    sigAverage(acounter).icespeed = NaN;
+                    sigAverage(acounter).icedir = NaN;
                     sigAverage(acounter).icehistogram.Nobs = hist( sigAverage(acounter).depth - ast, icebincenters);
                     sigAverage(acounter).icehistogram.bincenters = icebincenters;
                 else
@@ -433,6 +447,7 @@ ylabel('Temperature [C]')
 
 for ci = 1:nc
     thisc = [ (chunks(ci)+1) : chunks(ci+1) ];
+    if length(thisc) > 1 
 
     if ci==1, ax(4) = subplot(panels,1,4); else axes(ax(4)), end % east profiles
     pcolor([sigAverage(thisc).time], sigAverage(thisc(1)).z,reshape([sigAverage(thisc).east],...
@@ -473,6 +488,8 @@ for ci = 1:nc
     ylabel(['z [m]'])
     %caxis([-.5 .5])
     cb = colorbar; cb.Label.String = 'Backscatter [dB]';
+
+    end
 
 end
 
