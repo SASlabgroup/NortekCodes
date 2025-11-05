@@ -21,16 +21,16 @@ tic
 
 
 %% Site and file info
-site = 'S1A1'; lat = 70.48695; lon = -162.28278; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
+%site = 'S1A1'; lat = 70.48695; lon = -162.28278; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'S2A1'; lat = 70.77422; lon = -149.47707; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'NORSE'; lat = 70.831946; lon = -6.399105; doff=385; % NORSE mooring, stablemoor
 %site = 'STBMup'; lat = 48.56280 ; lon = -122.76700 ; doff=45; % Rosario mooring, stablemoor
-
+site = 'L1_2_SS'; lat = 70.85756519; lon = -150.6498465; doff=0.75; % a sea spider 0.75 m off the seabed
 
 dataDir = ['./'];
 
-fNameSigBase = ['CODA_S1A1_Sig_2020_*.mat'];
+fNameSigBase = ['S103965A018_L1_2_SS_*.mat'];
 
 flist = dir([dataDir fNameSigBase ]);
 if length(flist) < 1, disp('*** no files, check fNameSigBase ***'), return, end
@@ -428,7 +428,7 @@ datetick
 set(gca,'YLim',[0 1.1*max([sigBurst.sigwaveheight])])
 cb = colorbar; set(cb,'Visible','off')
 ylabel('H_s [m]')
-title(site)
+title(site,'interp','none')
 
 ax(2) = subplot(panels,1,2); % ice draft
 plot([sigBurst.time],[sigBurst.icethickness],'b-',[sigAverage.time],[sigAverage.icethickness],'g--')
