@@ -27,6 +27,9 @@ tic
 %site = 'NORSE'; lat = 70.831946; lon = -6.399105; doff=385; % NORSE mooring, stablemoor
 %site = 'STBMup'; lat = 48.56280 ; lon = -122.76700 ; doff=45; % Rosario mooring, stablemoor
 site = 'L1_2_SS'; lat = 70.85756519; lon = -150.6498465; doff=0.75; % a sea spider 0.75 m off the seabed
+%site = 'L2_4_SS'; lat = 71.00132872; lon = -150.0024359; doff=0.75; % a sea spider 0.75 m off the seabed
+%site = 'L3_2_SS'; lat = 70.77345129; lon = -149.4765369; doff=0.75; % a sea spider 0.75 m off the seabed (SAME AS CODA S2-A1)
+
 
 dataDir = ['./'];
 
