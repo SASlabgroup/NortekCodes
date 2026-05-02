@@ -21,9 +21,9 @@ tic
 
 
 %% Site and file info
-%site = 'S1A1'; lat = 70.48695; lon = -162.28278; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
+site = 'S1A1'; lat = 70.48695; lon = -162.28278; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'S2A1'; lat = 70.77422; lon = -149.47707; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
-site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
+%site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'NORSE'; lat = 70.831946; lon = -6.399105; doff=385; % NORSE mooring, stablemoor
 %site = 'STBMup'; lat = 48.56280 ; lon = -122.76700 ; doff=45; % Rosario mooring, stablemoor
 %site = 'L1_2_SS'; lat = 70.85756519; lon = -150.6498465; doff=0.75; % a sea spider 0.75 m off the seabed
@@ -33,7 +33,7 @@ site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea 
 
 dataDir = ['./'];
 
-fNameSigBase = ['S100337A006_CODA_S3A1_*.mat'];
+fNameSigBase = ['CODA_S1A1_Sig_2020_*.mat'];
 
 flist = dir([dataDir fNameSigBase ]);
 if length(flist) < 1, disp('*** no files, check fNameSigBase ***'), return, end
@@ -153,18 +153,13 @@ for fi=1:length(flist)
         end
 
         %% wave processing, assuming [u.v] are already rotated to [east, north]
-        if length(burstInd) >= 0.9*Config.Burst_NSample
+        if length(burstInd) == Config.Burst_NSample
         [ Hpres, Tpres, Hig, Tig, Epres, fpres ] = Pwaves(Data.Burst_Pressure(burstInd), rate);
             sigBurst(bcounter).IGwaveheight = Hig;
             sigBurst(bcounter).IGwaveperiod = Tig;
             sigBurst(bcounter).presspectra.energy = Epres';
             sigBurst(bcounter).presspectra.freq = fpres';
         else
-            sigBurst(bcounter).IGwaveheight = NaN;
-            sigBurst(bcounter).IGwaveperiod = NaN;
-            sigBurst(bcounter).presspectra.energy = NaN(size(Epres'));
-            sigBurst(bcounter).presspectra.freq = NaN(size(fpres'));
-        end
         
         [ Hs, Tp, Dp, E, f, a1, b1, a2, b2, check] = UVZwaves(u, v, ast, rate); % function from SWIFT codes repo
         
