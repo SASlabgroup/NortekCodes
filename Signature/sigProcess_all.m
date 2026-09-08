@@ -23,42 +23,50 @@ tic
 %% Site and file info
 %site = 'S1A1'; lat = 70.48695; lon = -162.28278; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'S2A1'; lat = 70.77422; lon = -149.47707; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
-site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
+%site = 'S3A1'; lat = 70.39953; lon = -145.85623; doff=0.75; % CODA S1-A1, a sea spider 0.75 m off the seabed
 %site = 'NORSE'; lat = 70.831946; lon = -6.399105; doff=385; % NORSE mooring, stablemoor
 %site = 'STBMup'; lat = 48.56280 ; lon = -122.76700 ; doff=45; % Rosario mooring, stablemoor
 %site = 'L1_2_SS'; lat = 70.85756519; lon = -150.6498465; doff=0.75; % a sea spider 0.75 m off the seabed
-%site = 'L2_4_SS'; lat = 71.00132872; lon = -150.0024359; doff=0.75; % a sea spider 0.75 m off the seabed
 %site = 'L3_2_SS'; lat = 70.77345129; lon = -149.4765369; doff=0.75; % a sea spider 0.75 m off the seabed (SAME AS CODA S2-A1)
+site = 'L2_4_SS'; lat = 71.00132872; lon = -150.0024359; doff=0.75; % a sea spider 0.75 m off the seabed
 
+plotAST = false;  % option to plot AST
+plotspectra = false; % option to make a movie of all spectra
 
 dataDir = ['./'];
 
-fNameSigBase = ['S100337A006_CODA_S3A1_*.mat'];
+fNameSigBase = ['S100793A019_L2_4_SS_1yr_*.mat'];
 
 flist = dir([dataDir fNameSigBase ]);
 if length(flist) < 1, disp('*** no files, check fNameSigBase ***'), return, end
 
 %% QC criteria
 
-despike = true;  % option to despike raw AST (acoustic surface tracking) for waves and ice
+despike = false;  % option to despike raw AST (acoustic surface tracking) for waves and ice
 trimvelocity = true;  % option to trim velocity profiles for ice draft... usually redundant to trim for surface reflections
-plotAST = false;  % option to plot AST
-removeiceoutliers = true; % remove final ice products that are outliers
+removeiceoutliers = false; % remove final ice products that are outliers
 
 mindepth = 4; % minimum depth to process
-mincorr = 40; % broadband Doppler correlation
+mincorr = 20; % broadband Doppler correlation
 
-minicethickness = 0.2; % min ice thickness considered valid during final screening, usually 0.2 (0.1 m is barometric noise)
-maxicethickness = 20; % max ice thickness considered valid during final screening, usually 20
+minicethickness = -10; % min ice thickness considered valid during final screening, usually 0.2 (0.1 m is barometric noise)
+maxicethickness = 30; % max ice thickness considered valid during final screening, usually 20
 maxicespeed = 2; % limit on ice drift tracking esimate (m/s)
-icebincenters = [0:.5:10]; % meters
+icebincenters = [0:.5:20]; % meters
 
 maxwaveperiod = 20; % max wave period allowed during final screening, usually 20 s
 minwaveperiod = 1; % min wave period allowed during final screening, usually 2 s
 minwaveheight = 0.1; % smallest wave height observable, usually 0.2 m
 minwaveheightfordir = 1; % smallest wave height for directional estimates, usually set to 1 m
-maxtailshapeexponent = -3;  % max value for f^q in the tail (f> 0.3 Hz), theoretically -4
+maxtailshapeexponent = -2;  % max value for f^q in the tail (f> 0.3 Hz), theoretically -4, usually set to -3
+ast_pres_tolerance = 1; % difference alllowed between median ast and mean pressure (should be close to zero for valid waves)
 
+%% initialize movie
+if plotspectra,
+    % initialize video
+    vidObj = VideoWriter([site '_allspectra.avi'],'MPEG-4');
+    open(vidObj);
+end
 
 
 %% Loop through files
@@ -114,7 +122,14 @@ for fi=1:length(flist)
         burstInd = firstindex(b) + [1:spacing] - 1;
         burstInd( burstInd > length(Data.Burst_Time) ) = [];
         ast = double( Data.Burst_AltimeterDistanceAST(burstInd) );
-        if plotAST, figure(1), clf, hist(ast), drawnow, end
+        pres = double( Data.Burst_Pressure(burstInd) );
+        if plotAST, 
+            figure(1), clf, 
+            plot(ast), hold on, 
+            plot(pres),
+            set(gca,'YLim',[0 maxicethickness])
+            drawnow, 
+        end
         range = Config.Burst_BlankingDistance + Config.Burst_CellSize*[1:Config.Burst_NCells];
         velindex = find(range < min(ast),1,'last'); % bin of burst velocity profile to use in wave processing
         if isempty(velindex), velindex = 1; end
@@ -135,6 +150,7 @@ for fi=1:length(flist)
         sigBurst(bcounter).lon = lon;
         sigBurst(bcounter).watertemp = mean( Data.Burst_Temperature(burstInd) );
         sigBurst(bcounter).depth = mean( Data.Burst_Pressure(burstInd) );
+        medianast(bcounter) = median(ast);
         waterdepth = sigBurst(bcounter).depth + doff;
 
 
@@ -154,7 +170,7 @@ for fi=1:length(flist)
 
         %% wave processing, assuming [u.v] are already rotated to [east, north]
         if length(burstInd) >= 0.9*Config.Burst_NSample
-        [ Hpres, Tpres, Hig, Tig, Epres, fpres ] = Pwaves(Data.Burst_Pressure(burstInd), rate);
+        [ Hpres, Tpres, Hig, Tig, Epres, fpres ] = Pwaves(pres, rate);
             sigBurst(bcounter).IGwaveheight = Hig;
             sigBurst(bcounter).IGwaveperiod = Tig;
             sigBurst(bcounter).presspectra.energy = Epres';
@@ -168,6 +184,21 @@ for fi=1:length(flist)
         
         [ Hs, Tp, Dp, E, f, a1, b1, a2, b2, check] = UVZwaves(u, v, ast, rate); % function from SWIFT codes repo
         
+   if plotspectra
+        figure(1), clf
+        subplot(2,1,1)
+        plot(ast), hold on, plot(pres)
+        legend('ast [m]', 'pressure [db]'), xlabel('index []')
+        title(datestr(bursttime(1)) )
+        subplot(2,1,2)
+        loglog(f,E)
+        axis([1e-3 1 1e-6 1e1])
+        ylabel('Energy density [m^2/Hz]')
+        xlabel('Frequency [Hz]')
+        currFrame = getframe(gcf);
+        writeVideo(vidObj,currFrame);
+    end
+
         if ~isnan(E)
             bt = polyfit(log(f(f>0.3)),log(E(f>0.3)),1);
             tailshape = bt(1);
@@ -193,7 +224,7 @@ for fi=1:length(flist)
         sigBurst(bcounter).wavespectra.check = check';
 
         %% ice stats
-        draft = sigBurst(bcounter).depth - mean(ast);
+        draft = sigBurst(bcounter).depth - median(ast);
         if draft > minicethickness & draft < maxicethickness
             sigBurst(bcounter).icethickness = draft;
             sigBurst(bcounter).icehistogram.Nobs = hist( sigBurst(bcounter).depth - ast , icebincenters);
@@ -328,12 +359,16 @@ for fi=1:length(flist)
 
 end % close file loop
 
+if plotspectra
+    close(vidObj);
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%%   CLEAN UP  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
 %% apply burst QC
 sigBurst(dryburst) = [];
+medianast(dryburst) = [];
 
 %% bad avg QC
 for si=1:length(sigAverage)
@@ -345,7 +380,6 @@ sigAverage(badavg) = [];
 
 
 %% remove peak direction if spread too large or waves too small (SNR problem)
-
 
 for si=1:length(sigBurst)
     [m fpindex] = min( abs( sigBurst(si).peakwaveperiod - sigBurst(si).wavespectra.freq ) );
@@ -360,6 +394,15 @@ for si=1:length(sigBurst)
     if 180/3.14*spread1(si) > 85 | sigBurst(si).sigwaveheight < minwaveheightfordir | isnan( sigBurst(si).sigwaveheight )
         sigBurst(si).peakwavedirT=NaN;
     end
+end
+
+%% remove waves if average ast and pressure do not match
+
+badwaves = find( [sigBurst.depth] - medianast > ast_pres_tolerance); 
+for bi = badwaves
+    sigBurst(bi).sigwaveheight = NaN;
+    sigBurst(bi).peakwaveperiod = NaN;
+    sigBurst(bi).peakwavedirT = NaN;
 end
 
 %% remove ice speeds that are unrealistically fast
@@ -432,7 +475,7 @@ chunks = [0 chunks length([sigAverage.time])];
 figure(100), clf
 
 ax(1) = subplot(panels,1,1); % wave heights
-plot([sigBurst.time],[sigBurst.sigwaveheight],'b-')
+plot([sigBurst.time],[sigBurst.sigwaveheight],'b*')
 datetick
 set(gca,'YLim',[0 1.1*max([sigBurst.sigwaveheight])])
 cb = colorbar; set(cb,'Visible','off')
@@ -560,6 +603,6 @@ print('-dpng',[site '_Signature_ice.png'])
 savefig([site '_Signature_ice.fig'])
 
 %% use plotSWIFT (from SWIFTcodes repo) to plot more wave details
-%plotSWIFT(sigBurst)
+plotSWIFT(sigBurst)
 
 
