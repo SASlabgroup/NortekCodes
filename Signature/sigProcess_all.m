@@ -306,7 +306,7 @@ for fi=1:length(flist)
             end
             sigAverage(acounter).east = nanmean( Data.Average_VelEast(AvgInd,:) );
             sigAverage(acounter).north = nanmean( Data.Average_VelNorth(AvgInd,:) );
-            sigAverage(acounter).up = ( nanmean(Data.Average_VelUp1(AvgInd,:)) + nanmean(Data.Average_VelUp2(a,:)) ) ./ 2;
+            sigAverage(acounter).up = ( nanmean(Data.Average_VelUp1(AvgInd,:)) + nanmean(Data.Average_VelUp2(AvgInd,:)) ) ./ 2;
             sigAverage(acounter).backscatter1 = nanmean( Data.Average_AmpBeam1(AvgInd,:) );
             sigAverage(acounter).backscatter2 = nanmean( Data.Average_AmpBeam2(AvgInd,:) );
             sigAverage(acounter).backscatter3 = nanmean( Data.Average_AmpBeam3(AvgInd,:) );
